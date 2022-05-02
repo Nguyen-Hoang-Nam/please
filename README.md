@@ -12,7 +12,14 @@ You can simply copy `please` file and store in executable path. For example
 
 Remember to grant executable mode by `chmod +x please`
 
+### Dependencies
+
+- Jq
+
 ## Usage
+
+This tool is test in Ubuntu and may work in MacOS, if you use Window then please
+use this with WSL2.
 
 Firstly, you need to create a `please.json` file to store configuration then all
 child directories will recognize it unless there is nearer `please.json` file
@@ -213,6 +220,7 @@ show "match" even `projects` also matches the projects
 - [ ] Add **test** command
 - [ ] Add **do** command
 - [ ] Add **new** command
+- [ ] Check dependencies exit
 
 ## Contributing
 
