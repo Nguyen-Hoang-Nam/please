@@ -1,0 +1,250 @@
+#!/bin/bash
+
+help() {
+	echo "Usage: $0 run|install|clean|build"
+}
+
+command_not_found() {
+	echo >&2 "Sorry, I can't find it"
+}
+
+config_not_found() {
+	echo >&2 "No plesant here, please create please.json to start"
+}
+
+multiple_match() {
+	echo >&2 "Match multiple time"
+}
+
+run_command='command_not_found'
+install_command='command_not_found'
+clean_command='command_not_found'
+build_command='command_not_found'
+deploy_command='command_not_found'
+
+is_found=false
+
+# TODO: Custom command
+do_command='command_not_found'
+
+config_path='please.json'
+
+find-file() {
+	local path=$(pwd)
+	while [[ "$path" != "" && ! -e "$path/$1" ]]; do
+		path=${path%/*}
+	done
+
+	if [[ $path = "" ]]; then
+		config_not_found
+		return 1
+	fi
+
+	config_path=$path
+	return 0
+}
+
+configure_local() {
+	run_command=$(echo "$config" | jq -r '.run')
+	if [[ $run_command = null ]]; then
+		run_command='command_not_found'
+	else
+		is_found=true
+	fi
+
+	install_command=$(echo "$config" | jq -r '.install')
+	if [[ $install_command = null ]]; then
+		install_command='command_not_found'
+	else
+		is_found=true
+	fi
+
+	clean_command=$(echo "$config" | jq -r '.clean')
+	if [[ $clean_command = null ]]; then
+		clean_command='command_not_found'
+	else
+		is_found=true
+	fi
+
+	build_command=$(echo "$config" | jq -r '.build')
+	if [[ $build_command = null ]]; then
+		build_command='command_not_found'
+	else
+		is_found=true
+	fi
+
+	deploy_command=$(echo "$config" | jq -r '.deploy')
+	if [[ $deploy_command = null ]]; then
+		deploy_command='command_not_found'
+	else
+		is_found=true
+	fi
+}
+
+match_list=()
+get-highest-priority() {
+	local max_priority=1
+	for match in "${match_list[@]}"; do
+		match_trim=$(sed -e "s/^'//" -e "s/'$//" <<<"$match")
+		priority=$(jq '.priority' <<<$match_trim)
+		if [[ $priority != null ]]; then
+			if [[ $max_priority -lt $priority ]]; then
+				max_priority=$priority
+			fi
+		fi
+	done
+
+	echo $max_priority
+}
+
+configure_global() {
+	while read project; do
+		project_jq() {
+			echo $project | jq $1
+		}
+
+		directory=$(project_jq '.directory')
+		if [[ $directory != null ]] && [[ $directory = "\"${PWD##*/}\"" ]]; then
+			match_list+=("'$project'")
+			continue
+		fi
+
+		files=$(project_jq '.files')
+		if [[ $files = null ]]; then continue; fi
+
+		list_files=$(ls)
+		while read file; do
+			file_jq() {
+				echo $file | jq $1
+			}
+
+			file_name=$(file_jq '.name')
+			if [[ $file_name = null ]]; then continue; fi
+
+			file_name_trim=$(sed -e 's/^"//' -e 's/"$//' <<<"$file_name")
+			grep -q $file_name_trim <<<$list_files
+			if [[ $? != 0 ]]; then continue; fi
+
+			file_match=$(file_jq '.match')
+			if [[ $file_match = null ]]; then
+				match_list+=("'$project'")
+				continue
+			fi
+
+			# Support regex file name
+			file_match_trim=$(sed -e 's/^"//' -e 's/"$//' <<<"$file_match")
+			cat $file_name_trim | grep -q $file_match_trim
+			if [[ $? = 0 ]]; then
+				match_list+=("'$project'")
+			fi
+		done < <(echo $files | jq -c '.[]')
+	done < <(echo $config | jq -c '.projects | .[]')
+
+	max_priority=$(get-highest-priority)
+
+	max_match=""
+	count_max_match=0
+	for match in "${match_list[@]}"; do
+		match_trim=$(sed -e "s/^'//" -e "s/'$//" <<<"$match")
+		priority=$(jq '.priority' <<<$match_trim)
+		if [[ $priority == null ]]; then
+			if [[ $max_priority = 1 ]]; then
+				max_match=$match
+				((count_max_match++))
+			fi
+		else
+			if [[ $max_priority = $priority ]]; then
+				max_match=$match
+				((count_max_match++))
+			fi
+		fi
+
+		if [[ $count_max_match = 2 ]]; then
+			multiple_match
+			exit 1
+		fi
+	done
+
+	if [[ $max_match != "" ]]; then
+		max_match_trim=$(sed -e "s/^'//" -e "s/'$//" <<<"$max_match")
+		run_command=$(echo "$max_match_trim" | jq -r '.run')
+		if [[ $run_command = null ]]; then
+			run_command='command_not_found'
+		else
+			is_found=true
+		fi
+
+		install_command=$(echo "$max_match_trim" | jq -r '.install')
+		if [[ $install_command = null ]]; then
+			install_command='command_not_found'
+		else
+			is_found=true
+		fi
+
+		clean_command=$(echo "$max_match_trim" | jq -r '.clean')
+		if [[ $clean_command = null ]]; then
+			clean_command='command_not_found'
+		else
+			is_found=true
+		fi
+
+		build_command=$(echo "$max_match_trim" | jq -r '.build')
+		if [[ $build_command = null ]]; then
+			build_command='command_not_found'
+		else
+			is_found=true
+		fi
+
+		deploy_command=$(echo "$max_match_trim" | jq -r '.deploy')
+		if [[ $deploy_command = null ]]; then
+			deploy_command='command_not_found'
+		else
+			is_found=true
+		fi
+	fi
+}
+
+read-file() {
+	find-file please.json
+
+	if [[ $? != 0 ]]; then exit 1; fi
+
+	config=$(cat "$config_path/please.json")
+	if [[ $(pwd) = $config_path ]]; then configure_local; fi
+
+	if [[ $is_found = false ]]; then
+		is_global=$(echo "$config" | jq 'has("projects")')
+		if [[ $is_global = true ]]; then
+			configure_global
+		fi
+	fi
+
+}
+
+read-file
+
+case "$1" in
+run)
+	eval $run_command
+	;;
+
+install)
+	eval $install_command
+	;;
+
+clean)
+	eval $clean_command
+	;;
+
+build)
+	eval $build_command
+	;;
+
+deploy)
+	eval $deploy_command
+	;;
+
+*)
+	help
+	;;
+esac

@@ -1,0 +1,40 @@
+{
+    "projects": [
+        {
+            "files": [
+                {
+                    "name": "pom.xml",
+                    "match": "<groupId>org.springframework.boot</groupId>"
+                }
+            ],
+            "run": "mvn spring-boot:run",
+            "clean": "mvn clean install",
+            "priority": 1
+        },
+
+        {
+            "directory": "multi-module-example",
+            "run": "mvn spring-boot:run -pl main-module-name",
+            "clean": "mvn clean install",
+            "priority": 2
+        },
+
+        {
+            "files": [
+                {
+                    "name": "build.gradle",
+                    "match": "org.springframework.boot"
+                }
+            ],
+            "run": "./gradlew bootRun"
+        },
+
+        {
+            "directory": "gin-example",
+            "files": [{ "name": "go.mod" }],
+            "run": "go run main"
+        }
+    ],
+
+    "run": "./plesant.sh"
+}
