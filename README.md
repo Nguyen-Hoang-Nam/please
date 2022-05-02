@@ -214,7 +214,7 @@ show "match" even `projects` also matches the projects
 - [ ] Support ripgrep, fd
 - [ ] Support yaml configuration with yq
 - [ ] Support replace jq
-- [ ] Support specific configuration file
+- [x] Support specific configuration file
 - [ ] Add **info** command to get info
 - [ ] Add **generate** command to generate configuration file
 - [x] Add **test** command

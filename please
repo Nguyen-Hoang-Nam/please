@@ -1,45 +1,62 @@
 #!/bin/bash
 
+COMMAND_TYPE=''
+COMMAND_FILE=''
+
+command_exec='command_not_found'
+is_found=false
+config_path='please.json'
+match_list=()
+
 help() {
-	echo "Usage: please run|install|clean|build|deploy|test"
+	echo "Usage: please run|install|clean|build|deploy|test file-name" >&2
 }
 
 command_not_found() {
-	echo >&2 "Sorry, I can't find it"
+    echo "Sorry, I can't find it" >&2
 }
 
 config_not_found() {
-	echo >&2 "No plesant here, please create please.json to start"
+    echo "Sorry, please create please.json file to start" >&2
 }
 
 multiple_match() {
-	echo >&2 "Match multiple time"
+    echo "Match multiple time" >&2
 }
 
-command_type=''
-command_exec='command_not_found'
+trim_double_quote() {
+    local text=$1
+    text="${text/#\"}"
+    text="${text/%\"}"
 
-is_found=false
+    echo text
+}
 
-config_path='please.json'
+trim_single_quote() {
+    local text=$1
+    text="${text/#\'}"
+    text="${text/%\'}"
 
-find-configuration-file() {
-	local path=$(pwd)
-	while [[ "$path" != "" && ! -e "$path/$1" ]]; do
-		path=${path%/*}
+    echo text
+}
+
+find_configuration_file() {
+	local path
+    path="$(pwd)"
+	while [[ "${path}" != "" && ! -e "$path/$1" ]]; do
+		path="${path%/*}"
 	done
 
-	if [[ $path = "" ]]; then
+	if [[ "${path}" == "" ]]; then
 		config_not_found
-		return 1
+        exit 1
 	fi
 
 	config_path=$path
-	return 0
 }
 
 configure_local() {
-	command_exec=$(echo "$config" | jq -r ".$command_type")
+	command_exec=$(echo "$config" | jq -r ".${COMMAND_TYPE}")
 	if [[ $command_exec = null ]]; then
 		command_exec='command_not_found'
 	else
@@ -47,8 +64,7 @@ configure_local() {
 	fi
 }
 
-match_list=()
-get-highest-priority() {
+get_highest_priority() {
 	local max_priority=1
 	for match in "${match_list[@]}"; do
 		match_trim=$(sed -e "s/^'//" -e "s/'$//" <<<"$match")
@@ -106,7 +122,7 @@ configure_global() {
 		done < <(echo $files | jq -c '.[]')
 	done < <(echo $config | jq -c '.projects | .[]')
 
-	max_priority=$(get-highest-priority)
+	max_priority=$(get_highest_priority)
 
 	max_match=""
 	count_max_match=0
@@ -133,7 +149,7 @@ configure_global() {
 
 	if [[ $max_match != "" ]]; then
 		max_match_trim=$(sed -e "s/^'//" -e "s/'$//" <<<"$max_match")
-		command_exec=$(echo "$max_match_trim" | jq -r ".$command_type")
+		command_exec=$(echo "$max_match_trim" | jq -r ".${COMMAND_TYPE}")
         if [[ $command_exec = null ]]; then
             command_exec='command_not_found'
         else
@@ -142,12 +158,12 @@ configure_global() {
 	fi
 }
 
-read-file() {
-	find-configuration-file please.json
+read_configuration_file() {
+    if [[ "${COMMAND_FILE}" == '' ]]; then COMMAND_FILE='please.json'; fi
+	find_configuration_file "${COMMAND_FILE}"
+	if (( $? != 0 )); then exit 1; fi
 
-	if [[ $? != 0 ]]; then exit 1; fi
-
-	config=$(cat "$config_path/please.json")
+	config=$(cat "$config_path/${COMMAND_FILE}")
 	if [[ $(pwd) = $config_path ]]; then configure_local; fi
 
 	if [[ $is_found = false ]]; then
@@ -161,27 +177,33 @@ read-file() {
 
 case "$1" in
 run)
-    command_type='run'
+    COMMAND_TYPE='run'
+    COMMAND_FILE="$2"
 	;;
 
 install)
-    command_type='install'
+    COMMAND_TYPE='install'
+    COMMAND_FILE="$2"
 	;;
 
 clean)
-    command_type='clean'
+    COMMAND_TYPE='clean'
+    COMMAND_FILE="$2"
 	;;
 
 build)
-    command_type='build'
+    COMMAND_TYPE='build'
+    COMMAND_FILE="$2"
 	;;
 
 deploy)
-    command_type='deploy'
+    COMMAND_TYPE='deploy'
+    COMMAND_FILE="$2"
 	;;
 
 test)
-    command_type='test'
+    COMMAND_TYPE='test'
+    COMMAND_FILE="$2"
     ;;
 
 *)
@@ -190,6 +212,5 @@ test)
 	;;
 esac
 
-read-file
-
+read_configuration_file
 eval $command_exec
