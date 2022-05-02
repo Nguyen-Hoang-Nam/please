@@ -213,14 +213,16 @@ show "match" even `projects` also matches the projects
 - [ ] Support shorthand json syntax
 - [ ] Support ripgrep, fd
 - [ ] Support yaml configuration with yq
-- [ ] Support replace jq with faster JSON parser
+- [ ] Support replace jq
 - [ ] Support specific configuration file
-- [ ] Add command to show info of command
-- [ ] Add command to generate new configuration file
-- [ ] Add **test** command
+- [ ] Add **info** command to get info
+- [ ] Add **generate** command to generate configuration file
+- [x] Add **test** command
 - [ ] Add **do** command
 - [ ] Add **new** command
 - [ ] Check dependencies exit
+- [ ] Support regex
+- [ ] Style help command
 
 ## Contributing
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 help() {
-	echo "Usage: $0 run|install|clean|build"
+	echo "Usage: please run|install|clean|build|deploy|test"
 }
 
 command_not_found() {
@@ -16,20 +16,14 @@ multiple_match() {
 	echo >&2 "Match multiple time"
 }
 
-run_command='command_not_found'
-install_command='command_not_found'
-clean_command='command_not_found'
-build_command='command_not_found'
-deploy_command='command_not_found'
+command_type=''
+command_exec='command_not_found'
 
 is_found=false
 
-# TODO: Custom command
-do_command='command_not_found'
-
 config_path='please.json'
 
-find-file() {
+find-configuration-file() {
 	local path=$(pwd)
 	while [[ "$path" != "" && ! -e "$path/$1" ]]; do
 		path=${path%/*}
@@ -45,37 +39,9 @@ find-file() {
 }
 
 configure_local() {
-	run_command=$(echo "$config" | jq -r '.run')
-	if [[ $run_command = null ]]; then
-		run_command='command_not_found'
-	else
-		is_found=true
-	fi
-
-	install_command=$(echo "$config" | jq -r '.install')
-	if [[ $install_command = null ]]; then
-		install_command='command_not_found'
-	else
-		is_found=true
-	fi
-
-	clean_command=$(echo "$config" | jq -r '.clean')
-	if [[ $clean_command = null ]]; then
-		clean_command='command_not_found'
-	else
-		is_found=true
-	fi
-
-	build_command=$(echo "$config" | jq -r '.build')
-	if [[ $build_command = null ]]; then
-		build_command='command_not_found'
-	else
-		is_found=true
-	fi
-
-	deploy_command=$(echo "$config" | jq -r '.deploy')
-	if [[ $deploy_command = null ]]; then
-		deploy_command='command_not_found'
+	command_exec=$(echo "$config" | jq -r ".$command_type")
+	if [[ $command_exec = null ]]; then
+		command_exec='command_not_found'
 	else
 		is_found=true
 	fi
@@ -167,45 +133,17 @@ configure_global() {
 
 	if [[ $max_match != "" ]]; then
 		max_match_trim=$(sed -e "s/^'//" -e "s/'$//" <<<"$max_match")
-		run_command=$(echo "$max_match_trim" | jq -r '.run')
-		if [[ $run_command = null ]]; then
-			run_command='command_not_found'
-		else
-			is_found=true
-		fi
-
-		install_command=$(echo "$max_match_trim" | jq -r '.install')
-		if [[ $install_command = null ]]; then
-			install_command='command_not_found'
-		else
-			is_found=true
-		fi
-
-		clean_command=$(echo "$max_match_trim" | jq -r '.clean')
-		if [[ $clean_command = null ]]; then
-			clean_command='command_not_found'
-		else
-			is_found=true
-		fi
-
-		build_command=$(echo "$max_match_trim" | jq -r '.build')
-		if [[ $build_command = null ]]; then
-			build_command='command_not_found'
-		else
-			is_found=true
-		fi
-
-		deploy_command=$(echo "$max_match_trim" | jq -r '.deploy')
-		if [[ $deploy_command = null ]]; then
-			deploy_command='command_not_found'
-		else
-			is_found=true
-		fi
+		command_exec=$(echo "$max_match_trim" | jq -r ".$command_type")
+        if [[ $command_exec = null ]]; then
+            command_exec='command_not_found'
+        else
+            is_found=true
+        fi
 	fi
 }
 
 read-file() {
-	find-file please.json
+	find-configuration-file please.json
 
 	if [[ $? != 0 ]]; then exit 1; fi
 
@@ -221,30 +159,37 @@ read-file() {
 
 }
 
-read-file
-
 case "$1" in
 run)
-	eval $run_command
+    command_type='run'
 	;;
 
 install)
-	eval $install_command
+    command_type='install'
 	;;
 
 clean)
-	eval $clean_command
+    command_type='clean'
 	;;
 
 build)
-	eval $build_command
+    command_type='build'
 	;;
 
 deploy)
-	eval $deploy_command
+    command_type='deploy'
 	;;
+
+test)
+    command_type='test'
+    ;;
 
 *)
 	help
+    exit 1
 	;;
 esac
+
+read-file
+
+eval $command_exec
