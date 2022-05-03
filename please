@@ -331,6 +331,20 @@ read_configuration_file() {
 
 }
 
+exec_command() {
+    printf "Command: %s\n\n" "${command_exec}"
+    printf "Are you sure to run this command (y/n)? "
+    read -r answer
+    case ${answer:0:1} in
+        y|Y )
+            eval ${command_exec}
+            ;;
+        * )
+            echo "End"
+            ;;
+    esac
+}
+
 main() {
     case "${1}" in
         run)
@@ -369,7 +383,7 @@ main() {
             ;;
     esac
 
-    if read_configuration_file; then eval $command_exec; fi
+    if read_configuration_file; then exec_command; fi
 }
 
 main "$@"
