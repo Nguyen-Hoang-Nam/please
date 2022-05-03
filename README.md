@@ -211,7 +211,7 @@ show "match" even `projects` also matches the projects
 
 - [ ] Refactor code
 - [ ] Support shorthand json syntax
-- [ ] Support ripgrep, fd
+- [x] Support ripgrep, fd
 - [x] Support yaml configuration with yq
 - [x] Support specific configuration file
 - [ ] Add **info** command to get info

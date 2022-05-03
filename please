@@ -10,12 +10,25 @@ CONFIGURATION_IS_ABSOLUTE=false
 CONFIGURATION_JSON=false
 CONFIGURATION_YAML=false
 
+RIPGREP_SUPPORT=false
+FD_SUPPORT=false
+
 if command -v jq &> /dev/null; then
     CONFIGURATION_JSON=true
+else
+    err "Sorry, you must have jq to parse configuration."
 fi
 
 if command -v yq &> /dev/null; then
     CONFIGURATION_YAML=true
+fi
+
+if command -v fd &> /dev/null; then
+    FD_SUPPORT=true
+fi
+
+if command -v rg &> /dev/null; then
+    RIPGREP_SUPPORT=true
 fi
 
 command_exec='command_not_found'
@@ -127,10 +140,8 @@ get_highest_priority() {
 	for match in "${match_list[@]}"; do
         match_trim=$(trim_single_quote "${match}")
 		priority=$(jq '.priority' <<<"${match_trim}")
-		if [[ $priority != null ]]; then
-			if [[ $max_priority -lt $priority ]]; then
-				max_priority=$priority
-			fi
+        if [[ $priority != null ]] && [[ $max_priority -lt $priority ]]; then
+			max_priority=$priority
 		fi
 	done
 
@@ -139,7 +150,7 @@ get_highest_priority() {
 
 get_highest_match_project() {
     local max_priority
-    max_priority=$1
+    max_priority=${1}
 
     local count_max_match
     count_max_match=0
@@ -193,8 +204,6 @@ match_project() {
         files=$(project_jq '.files')
         if [[ $files == null ]]; then continue; fi
 
-        local list_files
-        list_files=$(ls)
         while read -r file; do
             file_jq() {
                 echo "${file}" | jq "${1}"
@@ -204,8 +213,11 @@ match_project() {
             if [[ ${file_name} == null ]]; then continue; fi
 
             file_name_trim=$(trim_double_quote "${file_name}")
-            grep -q "${file_name_trim}" <<<"${list_files}"
-            if  ! grep -q "${file_name_trim}" <<<"${list_files}"; then continue; fi
+            if [[ ${FD_SUPPORT} == true ]]; then
+                if ! fd -q "${file_name_trim}"; then continue; fi
+            else
+                if ! find "${file_name_trim}" &>/dev/null; then continue; fi
+            fi
 
             file_match=$(file_jq '.match')
             if [[ ${file_match} == null ]]; then
@@ -215,9 +227,14 @@ match_project() {
 
             # Support regex file name
             file_match_trim=$(trim_double_quote "${file_match}")
-            grep -q "${file_match_trim}" <"${file_name_trim}"
-            if grep -q "${file_match_trim}" <"${file_name_trim}"; then
-                match_list+=("'$project'")
+            if [[ ${RIPGREP_SUPPORT} == true ]]; then
+                if rg -q "${file_match_trim}" "${file_name_trim}"; then
+                    match_list+=("'$project'")
+                fi
+            else
+                if grep -q "${file_match_trim}" <"${file_name_trim}"; then
+                    match_list+=("'$project'")
+                fi
             fi
         done < <(echo "${files}" | jq -c '.[]')
     done < <(echo "${projects}")
