@@ -1,27 +1,54 @@
 #!/bin/bash
 
 COMMAND_TYPE=''
-COMMAND_FILE=''
+
+CONFIGURATION_FILE=''
+CONFIGURATION_FILE_EXTENSION=''
+CONFIGURATION_FILE_NAME=''
+CONFIGURATION_IS_ABSOLUTE=false
+
+CONFIGURATION_JSON=false
+CONFIGURATION_YAML=false
+
+if command -v jq &> /dev/null; then
+    CONFIGURATION_JSON=true
+fi
+
+if command -v yq &> /dev/null; then
+    CONFIGURATION_YAML=true
+fi
 
 command_exec='command_not_found'
 is_found=false
-config_path='please.json'
+config_path=''
 match_list=()
 
+err() {
+    echo "${1}" >&2
+}
+
 help() {
-	echo "Usage: please run|install|clean|build|deploy|test file-name" >&2
+	err "Usage: please run|install|clean|build|deploy|test file-name"
 }
 
 command_not_found() {
-    echo "Sorry, I can't find it" >&2
+    err "Sorry, I can't find it"
 }
 
 config_not_found() {
-    echo "Sorry, please create please.json file to start" >&2
+    err "Sorry, please create please.json file to start"
 }
 
 multiple_match() {
-    echo "Match multiple time" >&2
+    err "Match multiple time"
+}
+
+project_not_match() {
+    err "Sorry, I can't match your project"
+}
+
+extension_not_support() {
+    err "Sorry, your configuration's extension does not supported"
 }
 
 trim_double_quote() {
@@ -29,7 +56,7 @@ trim_double_quote() {
     text="${text/#\"}"
     text="${text/%\"}"
 
-    echo text
+    echo "${text}"
 }
 
 trim_single_quote() {
@@ -37,13 +64,33 @@ trim_single_quote() {
     text="${text/#\'}"
     text="${text/%\'}"
 
-    echo text
+    echo "${text}"
 }
 
 find_configuration_file() {
 	local path
     path="$(pwd)"
-	while [[ "${path}" != "" && ! -e "$path/$1" ]]; do
+	while [[ "${path}" != "" ]]; do
+        if [[ ${CONFIGURATION_JSON} == true ]] && [[ -f "${path}/${CONFIGURATION_FILE_NAME}.json" ]]; then
+            CONFIGURATION_FILE="${CONFIGURATION_FILE_NAME}.json"
+            CONFIGURATION_FILE_EXTENSION='json'
+            break
+        fi
+
+        if [[ ${CONFIGURATION_YAML} == true ]]; then
+            if [[ -f "${path}/${CONFIGURATION_FILE_NAME}.yaml" ]]; then
+                CONFIGURATION_FILE="${CONFIGURATION_FILE_NAME}.yaml"
+                CONFIGURATION_FILE_EXTENSION='yaml'
+                break
+            fi
+
+            if [[ -f "${path}/${CONFIGURATION_FILE_NAME}.yml" ]]; then
+                CONFIGURATION_FILE="${CONFIGURATION_FILE_NAME}.yml"
+                CONFIGURATION_FILE_EXTENSION='yaml'
+                break
+            fi
+        fi
+
 		path="${path%/*}"
 	done
 
@@ -52,23 +99,34 @@ find_configuration_file() {
         exit 1
 	fi
 
-	config_path=$path
+    config_path="${path}"
 }
 
-configure_local() {
-	command_exec=$(echo "$config" | jq -r ".${COMMAND_TYPE}")
-	if [[ $command_exec = null ]]; then
+set_command() {
+    local command_json=$1
+	command_exec=$(echo "${command_json}" | jq -r ".${COMMAND_TYPE}")
+	if [[ $command_exec == null ]]; then
 		command_exec='command_not_found'
 	else
 		is_found=true
 	fi
 }
 
+set_command_yq() {
+    local command_json=$1
+    command_exec=$(echo "${command_json}" | yq -r ".${COMMAND_TYPE}")
+    if [[ $command_exec == null ]]; then
+        command_exec='command_not_found'
+    else
+        is_found=true
+    fi
+}
+
 get_highest_priority() {
 	local max_priority=1
 	for match in "${match_list[@]}"; do
-		match_trim=$(sed -e "s/^'//" -e "s/'$//" <<<"$match")
-		priority=$(jq '.priority' <<<$match_trim)
+        match_trim=$(trim_single_quote "${match}")
+		priority=$(jq '.priority' <<<"${match_trim}")
 		if [[ $priority != null ]]; then
 			if [[ $max_priority -lt $priority ]]; then
 				max_priority=$priority
@@ -76,141 +134,225 @@ get_highest_priority() {
 		fi
 	done
 
-	echo $max_priority
+	echo "${max_priority}"
 }
 
-configure_global() {
-	while read project; do
-		project_jq() {
-			echo $project | jq $1
-		}
+get_highest_match_project() {
+    local max_priority
+    max_priority=$1
 
-		directory=$(project_jq '.directory')
-		if [[ $directory != null ]] && [[ $directory = "\"${PWD##*/}\"" ]]; then
-			match_list+=("'$project'")
-			continue
-		fi
+    local count_max_match
+    count_max_match=0
 
-		files=$(project_jq '.files')
-		if [[ $files = null ]]; then continue; fi
+    local max_match
+    max_match=''
+    for match in "${match_list[@]}"; do
+        match_trim=$(trim_single_quote "${match}")
+        priority=$(jq '.priority' <<<"${match_trim}")
+        if [[ $priority == null ]]; then
+            if [[ $max_priority == 1 ]]; then
+                max_match="${match}"
+                (( count_max_match++ ))
+            fi
+        else
+            if [[ $max_priority == "$priority" ]]; then
+                max_match="${match}"
+                (( count_max_match++ ))
+            fi
+        fi
 
-		list_files=$(ls)
-		while read file; do
-			file_jq() {
-				echo $file | jq $1
-			}
+        if [[ $count_max_match == 2 ]]; then
+            multiple_match
+            exit 1
+        fi
+    done
 
-			file_name=$(file_jq '.name')
-			if [[ $file_name = null ]]; then continue; fi
+    echo "${max_match}"
+}
 
-			file_name_trim=$(sed -e 's/^"//' -e 's/"$//' <<<"$file_name")
-			grep -q $file_name_trim <<<$list_files
-			if [[ $? != 0 ]]; then continue; fi
+match_project() {
+    local projects
 
-			file_match=$(file_jq '.match')
-			if [[ $file_match = null ]]; then
-				match_list+=("'$project'")
-				continue
-			fi
+    if [[ "${CONFIGURATION_FILE_EXTENSION}" == 'json' ]]; then
+        projects="$(echo "${config}" | jq -c '.projects | .[]')"
+    elif [[ "${CONFIGURATION_FILE_EXTENSION}" == 'yaml' ]]; then 
+        projects="$(echo "${config}" | yq -c '.projects | .[]')"
+    fi
 
-			# Support regex file name
-			file_match_trim=$(sed -e 's/^"//' -e 's/"$//' <<<"$file_match")
-			cat $file_name_trim | grep -q $file_match_trim
-			if [[ $? = 0 ]]; then
-				match_list+=("'$project'")
-			fi
-		done < <(echo $files | jq -c '.[]')
-	done < <(echo $config | jq -c '.projects | .[]')
+    while read -r project; do
+        project_jq() {
+            echo "${project}" | jq "${1}"
+        }
 
-	max_priority=$(get_highest_priority)
+        directory=$(project_jq '.directory')
+        if [[ $directory != null ]] && [[ "${directory}" == "\"${PWD##*/}\"" ]]; then
+            match_list+=("'$project'")
+            continue
+        fi
 
-	max_match=""
-	count_max_match=0
-	for match in "${match_list[@]}"; do
-		match_trim=$(sed -e "s/^'//" -e "s/'$//" <<<"$match")
-		priority=$(jq '.priority' <<<$match_trim)
-		if [[ $priority == null ]]; then
-			if [[ $max_priority = 1 ]]; then
-				max_match=$match
-				((count_max_match++))
-			fi
-		else
-			if [[ $max_priority = $priority ]]; then
-				max_match=$match
-				((count_max_match++))
-			fi
-		fi
+        files=$(project_jq '.files')
+        if [[ $files == null ]]; then continue; fi
 
-		if [[ $count_max_match = 2 ]]; then
-			multiple_match
-			exit 1
-		fi
-	done
+        local list_files
+        list_files=$(ls)
+        while read -r file; do
+            file_jq() {
+                echo "${file}" | jq "${1}"
+            }
+
+            file_name=$(file_jq '.name')
+            if [[ ${file_name} == null ]]; then continue; fi
+
+            file_name_trim=$(trim_double_quote "${file_name}")
+            grep -q "${file_name_trim}" <<<"${list_files}"
+            if  ! grep -q "${file_name_trim}" <<<"${list_files}"; then continue; fi
+
+            file_match=$(file_jq '.match')
+            if [[ ${file_match} == null ]]; then
+                match_list+=("'$project'")
+                continue
+            fi
+
+            # Support regex file name
+            file_match_trim=$(trim_double_quote "${file_match}")
+            grep -q "${file_match_trim}" <"${file_name_trim}"
+            if grep -q "${file_match_trim}" <"${file_name_trim}"; then
+                match_list+=("'$project'")
+            fi
+        done < <(echo "${files}" | jq -c '.[]')
+    done < <(echo "${projects}")
+}
+
+set_match_command() {
+    match_project
+
+    if [[ ${#match_list[@]} == 0 ]]; then
+        project_not_match
+        exit 1
+
+    elif [[ ${#match_list[@]} == 1 ]]; then
+        match_trim=$(trim_single_quote "${match_list[0]}")
+        set_command "${match_trim}"
+        return 0
+    fi
+
+	local max_priority
+    max_priority=$(get_highest_priority)
+
+    local max_match
+    max_match=$(get_highest_match_project "${max_priority}")
 
 	if [[ $max_match != "" ]]; then
-		max_match_trim=$(sed -e "s/^'//" -e "s/'$//" <<<"$max_match")
-		command_exec=$(echo "$max_match_trim" | jq -r ".${COMMAND_TYPE}")
-        if [[ $command_exec = null ]]; then
-            command_exec='command_not_found'
-        else
-            is_found=true
-        fi
+        max_match_trim=$(trim_single_quote "${max_match}")
+        set_command "${max_match_trim}"
 	fi
+}
+
+get_extension() {
+    if [[ "${CONFIGURATION_FILE}" == '' ]]; then
+        CONFIGURATION_FILE_NAME='please'
+        if [[ ${CONFIGURATION_JSON} != true ]] && [[ ${CONFIGURATION_YAML} != true ]]; then
+            extension_not_support
+            exit 1
+        fi
+
+    else
+        CONFIGURATION_IS_ABSOLUTE=true
+        CONFIGURATION_FILE_EXTENSION="${CONFIGURATION_FILE#*.}"
+        CONFIGURATION_FILE_NAME="${CONFIGURATION_FILE%.*}"
+        if [[ "${CONFIGURATION_FILE_EXTENSION}" == '' ]]; then
+            extension_not_support
+            exit 1
+
+        elif [[ "${CONFIGURATION_FILE_EXTENSION}" == 'json' ]] && [[ "${CONFIGURATION_JSON}" == true ]]; then
+            return 0
+
+        elif [[ "${CONFIGURATION_FILE_EXTENSION}" == 'yaml' ]] && [[ "${CONFIGURATION_YAML}" == true ]]; then
+            return 0
+
+        elif [[ "${CONFIGURATION_FILE_EXTENSION}" == 'yml' ]] && [[ "${CONFIGURATION_YAML}" == true ]]; then
+            CONFIGURATION_FILE_EXTENSION='yaml'
+            return 0
+
+        else
+            extension_not_support
+            exit 1
+
+        fi
+    fi
 }
 
 read_configuration_file() {
-    if [[ "${COMMAND_FILE}" == '' ]]; then COMMAND_FILE='please.json'; fi
-	find_configuration_file "${COMMAND_FILE}"
-	if (( $? != 0 )); then exit 1; fi
+    get_extension
 
-	config=$(cat "$config_path/${COMMAND_FILE}")
-	if [[ $(pwd) = $config_path ]]; then configure_local; fi
+    if [[ ${CONFIGURATION_IS_ABSOLUTE} == true ]]; then
+        if [[ ! -f "$(pwd)/${CONFIGURATION_FILE_NAME}.${CONFIGURATION_FILE_EXTENSION}" ]]; then
+            config=$(cat "$(pwd)/${CONFIGURATION_FILE_NAME}.${CONFIGURATION_FILE_EXTENSION}")
+        fi
 
-	if [[ $is_found = false ]]; then
-		is_global=$(echo "$config" | jq 'has("projects")')
-		if [[ $is_global = true ]]; then
-			configure_global
-		fi
+    else
+        if ! find_configuration_file; then exit 1; fi
+
+        config=$(cat "${config_path}/${CONFIGURATION_FILE}")
+    fi
+
+    if [[ $(pwd) == "${config_path}" ]]; then
+        if [[ "${CONFIGURATION_FILE_EXTENSION}" == 'json' ]]; then
+            set_command "${config}";
+        elif [[ "${CONFIGURATION_FILE_EXTENSION}" == 'yaml' ]]; then 
+            set_command_yq "${config}";
+        fi
+    fi
+
+	if [[ ${is_found} = false ]]; then
+        if [[ "${CONFIGURATION_FILE_EXTENSION}" == 'json' ]]; then
+            if [[ $(echo "${config}" | jq 'has("projects")') == true ]]; then set_match_command; fi
+        elif [[ "${CONFIGURATION_FILE_EXTENSION}" == 'yaml' ]]; then 
+            if [[ $(echo "${config}" | yq 'has("projects")') == true ]]; then set_match_command; fi
+        fi
 	fi
 
 }
 
-case "$1" in
-run)
-    COMMAND_TYPE='run'
-    COMMAND_FILE="$2"
-	;;
+main() {
+    case "${1}" in
+        run)
+            COMMAND_TYPE='run'
+            CONFIGURATION_FILE="${2}"
+            ;;
 
-install)
-    COMMAND_TYPE='install'
-    COMMAND_FILE="$2"
-	;;
+        install)
+            COMMAND_TYPE='install'
+            CONFIGURATION_FILE="${2}"
+            ;;
 
-clean)
-    COMMAND_TYPE='clean'
-    COMMAND_FILE="$2"
-	;;
+        clean)
+            COMMAND_TYPE='clean'
+            CONFIGURATION_FILE="${2}"
+            ;;
 
-build)
-    COMMAND_TYPE='build'
-    COMMAND_FILE="$2"
-	;;
+        build)
+            COMMAND_TYPE='build'
+            CONFIGURATION_FILE="${2}"
+            ;;
 
-deploy)
-    COMMAND_TYPE='deploy'
-    COMMAND_FILE="$2"
-	;;
+        deploy)
+            COMMAND_TYPE='deploy'
+            CONFIGURATION_FILE="${2}"
+            ;;
 
-test)
-    COMMAND_TYPE='test'
-    COMMAND_FILE="$2"
-    ;;
+        test)
+            COMMAND_TYPE='test'
+            CONFIGURATION_FILE="${2}"
+            ;;
 
-*)
-	help
-    exit 1
-	;;
-esac
+        *)
+            help
+            exit 1
+            ;;
+    esac
 
-read_configuration_file
-eval $command_exec
+    if read_configuration_file; then eval $command_exec; fi
+}
+
+main "$@"

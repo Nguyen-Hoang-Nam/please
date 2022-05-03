@@ -1,0 +1,24 @@
+projects:
+  - files:
+      - name: pom.xml
+        match: "<groupId>org.springframework.boot</groupId>"
+    run: mvn spring-boot:run
+    clean: mvn clean install
+    priority: 1
+  - directory: smcc-oncx-backend-v2
+    run: mvn spring-boot:run -pl oncx-backend-web
+    clean: mvn clean install
+    priority: 2
+  - files:
+      - name: build.gradle
+        match: org.springframework.boot
+    run: "./gradlew bootRun"
+  - directory: user-service
+    files:
+      - name: go.mod
+    run: go run main.go
+    priority: 2
+  - files:
+      - name: go.mod
+    run: go run main.go
+run: go run main.go
