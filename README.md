@@ -210,18 +210,14 @@ show "match" even `projects` also matches the projects
 ## TODO
 
 - [ ] Support shorthand json syntax
-- [x] Support ripgrep, fd
-- [x] Support yaml configuration with yq
-- [x] Support specific configuration file
-- [x] Add **info** command to get info
 - [ ] Add **generate** command to generate configuration file
-- [x] Add **test** command
 - [ ] Add **do** command
 - [ ] Add **new** command
-- [x] Check dependencies exit
 - [ ] Support regex
 - [ ] Style help command
 - [ ] Support check dependencies' version
+- [ ] Add man page
+- [ ] Support ZSH completion
 
 ## Contributing
 
