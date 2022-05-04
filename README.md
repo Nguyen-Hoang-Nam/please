@@ -214,7 +214,7 @@ show "match" even `projects` also matches the projects
 - [ ] Add **do** command
 - [ ] Add **new** command
 - [ ] Support regex
-- [ ] Style help command
+- [x] Style help command
 - [ ] Support check dependencies' version
 - [ ] Add man page
 - [ ] Support ZSH completion

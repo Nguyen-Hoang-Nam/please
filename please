@@ -42,7 +42,20 @@ err() {
 }
 
 help() {
-	err "Usage: please run|install|clean|build|deploy|test file-name"
+    printf "Manage all command tools as one\n"
+	printf "\nUSAGE:\n"
+    printf "    please [OPTION]\n"
+    printf "\nOPTIONS:\n"
+    printf "    run <file-name>\t\tRun command\n"
+    printf "    build <file-name>\t\tBuild command\n"
+    printf "    clean <file-name>\t\tClean command\n"
+    printf "    deploy <file-name>\t\tDeploy command\n"
+    printf "    install <file-name>\t\tInstall command\n"
+    printf "    test <file-name>\t\tTest command\n"
+    printf "    info <command>\t\tShow description of command\n"
+    printf "    help \t\t\tShow help\n"
+    printf "\nEXAMPLE:\n"
+    printf "    please run\n"
 }
 
 command_not_found() {
@@ -475,6 +488,11 @@ main() {
             COMMAND_INFO=true
 
             read_configuration_file
+            ;;
+
+        help)
+            help
+            exit 0
             ;;
 
         *)
