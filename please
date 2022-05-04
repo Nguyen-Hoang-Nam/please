@@ -64,6 +64,10 @@ extension_not_support() {
     err "Sorry, your configuration's extension does not supported"
 }
 
+dependency_not_found() {
+    err "Sorry, please install ${1} before use this command"
+}
+
 trim_double_quote() {
     local text=$1
     text="${text/#\"}"
@@ -115,10 +119,36 @@ find_configuration_file() {
     config_path="${path}"
 }
 
+check_dependencies() {
+    command_dependencies=$(echo "${1}" | jq -r ".dependencies")
+    if [[ ${command_dependencies} != null ]]; then
+        while read -r dependency; do
+            file_jq() {
+                echo "${dependency}" | jq "${1}"
+            }
+
+            dependency_command=$(file_jq '.command')
+            if [[ ${dependency_command} == null ]]; then continue; fi
+
+            dependency_command_trim=$(trim_double_quote "${dependency_command}")
+            if ! command -v "${dependency_command_trim}" &> /dev/null; then
+                dependency_not_found "${dependency_command_trim}"
+                exit 1
+            fi
+        done < <(echo "${command_dependencies}" | jq -c '.[]')
+    fi
+}
+
 set_command() {
     local command_json=$1
-	command_exec=$(echo "${command_json}" | jq -r ".${COMMAND_TYPE}")
-	if [[ $command_exec == null ]]; then
+
+    local command_data
+	command_data=$(echo "${command_json}" | jq -r ".${COMMAND_TYPE}")
+
+    check_dependencies "${command_data}"
+
+    command_exec=$(echo "${command_data}" | jq -r ".command")
+	if [[ ${command_exec} == null ]]; then
 		command_exec='command_not_found'
 	else
 		is_found=true
@@ -126,13 +156,19 @@ set_command() {
 }
 
 set_command_yq() {
-    local command_json=$1
-    command_exec=$(echo "${command_json}" | yq -r ".${COMMAND_TYPE}")
-    if [[ $command_exec == null ]]; then
-        command_exec='command_not_found'
-    else
-        is_found=true
-    fi
+    local command_yaml=$1
+
+    local command_data
+	command_data=$(echo "${command_yaml}" | yq -r ".${COMMAND_TYPE}")
+
+    check_dependencies "${command_data}"
+
+    command_exec=$(echo "${command_data}" | jq -r ".command")
+	if [[ ${command_exec} == null ]]; then
+		command_exec='command_not_found'
+	else
+		is_found=true
+	fi
 }
 
 get_highest_priority() {

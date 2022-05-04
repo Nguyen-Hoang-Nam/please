@@ -219,9 +219,10 @@ show "match" even `projects` also matches the projects
 - [x] Add **test** command
 - [ ] Add **do** command
 - [ ] Add **new** command
-- [ ] Check dependencies exit
+- [x] Check dependencies exit
 - [ ] Support regex
 - [ ] Style help command
+- [ ] Support check dependencies' version
 
 ## Contributing
 

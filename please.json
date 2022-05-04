@@ -7,15 +7,28 @@
                     "match": "<groupId>org.springframework.boot</groupId>"
                 }
             ],
-            "run": "mvn spring-boot:run",
-            "clean": "mvn clean install",
+            "run": {
+                "command": "mvn spring-boot:run",
+                "dependencies": [{ "command": "mvn" }]
+            },
+            "clean": {
+                "command": "mvn clean install",
+                "dependencies": [{ "command": "mvn" }]
+            },
             "priority": 1
         },
 
         {
             "directory": "multi-module-example",
-            "run": "mvn spring-boot:run -pl main-module-name",
-            "clean": "mvn clean install",
+            "run": {
+                "command": "mvn spring-boot:run -pl main-module-name",
+                "dependencies": [{ "command": "mvn" }],
+                "info": "Because of unknown main module, this command will run the main moduel"
+            },
+            "clean": {
+                "command": "mvn clean install",
+                "dependencies": [{ "command": "mvn" }]
+            },
             "priority": 2
         },
 
@@ -26,13 +39,18 @@
                     "match": "org.springframework.boot"
                 }
             ],
-            "run": "./gradlew bootRun"
+            "run": {
+                "command": "./gradlew bootRun"
+            }
         },
 
         {
             "directory": "gin-example",
             "files": [{ "name": "go.mod" }],
-            "run": "go run main"
+            "run": {
+                "command": "go run main.go",
+                "dependencies": [{ "command": "go" }]
+            }
         }
     ],
 
