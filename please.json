@@ -23,7 +23,7 @@
             "run": {
                 "command": "mvn spring-boot:run -pl main-module-name",
                 "dependencies": [{ "command": "mvn" }],
-                "info": "Because of unknown main module, this command will run the main moduel"
+                "description": "Because of unknown main module, this command will run the main moduel"
             },
             "clean": {
                 "command": "mvn clean install",
@@ -54,5 +54,5 @@
         }
     ],
 
-    "run": "./plesant.sh"
+    "run": { "command": "./plesant.sh" }
 }

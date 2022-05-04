@@ -209,12 +209,11 @@ show "match" even `projects` also matches the projects
 
 ## TODO
 
-- [ ] Refactor code
 - [ ] Support shorthand json syntax
 - [x] Support ripgrep, fd
 - [x] Support yaml configuration with yq
 - [x] Support specific configuration file
-- [ ] Add **info** command to get info
+- [x] Add **info** command to get info
 - [ ] Add **generate** command to generate configuration file
 - [x] Add **test** command
 - [ ] Add **do** command

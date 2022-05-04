@@ -1,6 +1,7 @@
 #!/bin/bash
 
 COMMAND_TYPE=''
+COMMAND_INFO=false
 
 CONFIGURATION_FILE=''
 CONFIGURATION_FILE_EXTENSION=''
@@ -139,20 +140,71 @@ check_dependencies() {
     fi
 }
 
+print_dependencies() {
+    local count
+    count=0
+
+    command_dependencies=$(echo "${1}" | jq -r ".dependencies")
+    if [[ ${command_dependencies} != null ]]; then
+        while read -r dependency; do
+            file_jq() {
+                echo "${dependency}" | jq "${1}"
+            }
+
+            dependency_command=$(file_jq '.command')
+            if [[ ${dependency_command} == null ]]; then continue; fi
+
+            (( count++ ))
+
+            dependency_command_trim=$(trim_double_quote "${dependency_command}")
+            if [[ ${count} == 1 ]]; then
+                echo "Dependencies:"
+                echo "  - ${dependency_command_trim}"
+            fi
+        done < <(echo "${command_dependencies}" | jq -c '.[]')
+    fi
+}
+
 set_command() {
+    local command_data
+	command_data=${1}
+
+    if [[ "${COMMAND_INFO}" == true ]]; then
+        command_exec=$(echo "${command_data}" | jq -r ".command")
+        if [[ ${command_exec} == null ]]; then
+            command_exec='command_not_found'
+        else
+            is_found=true
+        fi
+
+        printf "Command: %s\n\n" "${command_exec}"
+
+        local command_description
+        command_description=$(echo "${command_data}" | jq -r ".description")
+        if [[ ${command_description} != null ]]; then
+            echo "Description: ${command_description}"
+        fi
+
+        print_dependencies "${command_data}"
+    else
+        check_dependencies "${command_data}"
+
+        command_exec=$(echo "${command_data}" | jq -r ".command")
+        if [[ ${command_exec} == null ]]; then
+            command_exec='command_not_found'
+        else
+            is_found=true
+        fi
+    fi
+}
+
+set_command_jq() {
     local command_json=$1
 
     local command_data
-	command_data=$(echo "${command_json}" | jq -r ".${COMMAND_TYPE}")
+    command_data=$(echo "${command_json}" | jq -r ".${COMMAND_TYPE}")
 
-    check_dependencies "${command_data}"
-
-    command_exec=$(echo "${command_data}" | jq -r ".command")
-	if [[ ${command_exec} == null ]]; then
-		command_exec='command_not_found'
-	else
-		is_found=true
-	fi
+    set_command "${command_data}"
 }
 
 set_command_yq() {
@@ -161,14 +213,7 @@ set_command_yq() {
     local command_data
 	command_data=$(echo "${command_yaml}" | yq -r ".${COMMAND_TYPE}")
 
-    check_dependencies "${command_data}"
-
-    command_exec=$(echo "${command_data}" | jq -r ".command")
-	if [[ ${command_exec} == null ]]; then
-		command_exec='command_not_found'
-	else
-		is_found=true
-	fi
+    set_command "${command_data}"
 }
 
 get_highest_priority() {
@@ -285,7 +330,7 @@ set_match_command() {
 
     elif [[ ${#match_list[@]} == 1 ]]; then
         match_trim=$(trim_single_quote "${match_list[0]}")
-        set_command "${match_trim}"
+        set_command_jq "${match_trim}"
         return 0
     fi
 
@@ -297,7 +342,7 @@ set_match_command() {
 
 	if [[ $max_match != "" ]]; then
         max_match_trim=$(trim_single_quote "${max_match}")
-        set_command "${max_match_trim}"
+        set_command_jq "${max_match_trim}"
 	fi
 }
 
@@ -351,7 +396,7 @@ read_configuration_file() {
 
     if [[ $(pwd) == "${config_path}" ]]; then
         if [[ "${CONFIGURATION_FILE_EXTENSION}" == 'json' ]]; then
-            set_command "${config}";
+            set_command_jq "${config}";
         elif [[ "${CONFIGURATION_FILE_EXTENSION}" == 'yaml' ]]; then 
             set_command_yq "${config}";
         fi
@@ -386,31 +431,50 @@ main() {
         run)
             COMMAND_TYPE='run'
             CONFIGURATION_FILE="${2}"
+
+            if read_configuration_file; then exec_command; fi
             ;;
 
         install)
             COMMAND_TYPE='install'
             CONFIGURATION_FILE="${2}"
+
+            if read_configuration_file; then exec_command; fi
             ;;
 
         clean)
             COMMAND_TYPE='clean'
             CONFIGURATION_FILE="${2}"
+
+            if read_configuration_file; then exec_command; fi
             ;;
 
         build)
             COMMAND_TYPE='build'
             CONFIGURATION_FILE="${2}"
+
+            if read_configuration_file; then exec_command; fi
             ;;
 
         deploy)
             COMMAND_TYPE='deploy'
             CONFIGURATION_FILE="${2}"
+
+            if read_configuration_file; then exec_command; fi
             ;;
 
         test)
             COMMAND_TYPE='test'
             CONFIGURATION_FILE="${2}"
+
+            if read_configuration_file; then exec_command; fi
+            ;;
+
+        info)
+            COMMAND_TYPE=${2}
+            COMMAND_INFO=true
+
+            read_configuration_file
             ;;
 
         *)
@@ -418,8 +482,6 @@ main() {
             exit 1
             ;;
     esac
-
-    if read_configuration_file; then exec_command; fi
 }
 
 main "$@"
