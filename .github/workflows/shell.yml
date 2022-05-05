@@ -14,3 +14,17 @@ jobs:
 
       - name: Run ShellCheck
         uses: ludeeus/action-shellcheck@master
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup BATS
+        uses: mig4/setup-bats@v1
+        with:
+          bats-version: 1.2.1
+
+      - name: Test
+        run: cd test && bats please_test
