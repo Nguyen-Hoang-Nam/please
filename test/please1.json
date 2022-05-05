@@ -1,0 +1,8 @@
+{
+    "run": { "command": "echo run" },
+    "build": { "command": "echo build" },
+    "install": { "command": "echo install" },
+    "clean": { "command": "echo clean" },
+    "deploy": { "command": "echo deploy" },
+    "test": { "command": "echo test" }
+}

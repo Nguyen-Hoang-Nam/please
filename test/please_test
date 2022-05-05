@@ -1,0 +1,25 @@
+#!/usr/bin/env bats
+
+@test "Test run command" {
+    ../please run -y
+}
+
+@test "Test build command" {
+    ../please build -y
+}
+
+@test "Test install command" {
+    ../please install -y
+}
+
+@test "Test clean command" {
+    ../please clean -y
+}
+
+@test "Test deploy command" {
+    ../please deploy -y
+}
+
+@test "Test test command" {
+    ../please test -y
+}

@@ -218,6 +218,7 @@ show "match" even `projects` also matches the projects
 - [ ] Support check dependencies' version
 - [ ] Add man page
 - [ ] Support ZSH completion
+- [ ] Support relative path file
 
 ## Contributing
 

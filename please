@@ -2,6 +2,7 @@
 
 COMMAND_TYPE=''
 COMMAND_INFO=false
+COMMAND_YES=false
 
 CONFIGURATION_FILE=''
 CONFIGURATION_FILE_EXTENSION=''
@@ -397,7 +398,7 @@ read_configuration_file() {
     get_extension
 
     if [[ ${CONFIGURATION_IS_ABSOLUTE} == true ]]; then
-        if [[ ! -f "$(pwd)/${CONFIGURATION_FILE_NAME}.${CONFIGURATION_FILE_EXTENSION}" ]]; then
+        if [[ -f "$(pwd)/${CONFIGURATION_FILE_NAME}.${CONFIGURATION_FILE_EXTENSION}" ]]; then
             config=$(cat "$(pwd)/${CONFIGURATION_FILE_NAME}.${CONFIGURATION_FILE_EXTENSION}")
         fi
 
@@ -407,7 +408,7 @@ read_configuration_file() {
         config=$(cat "${config_path}/${CONFIGURATION_FILE}")
     fi
 
-    if [[ $(pwd) == "${config_path}" ]]; then
+    if  [[ ${CONFIGURATION_IS_ABSOLUTE} == true ]] || [[ $(pwd) == "${config_path}" ]]; then
         if [[ "${CONFIGURATION_FILE_EXTENSION}" == 'json' ]]; then
             set_command_jq "${config}";
         elif [[ "${CONFIGURATION_FILE_EXTENSION}" == 'yaml' ]]; then 
@@ -427,58 +428,79 @@ read_configuration_file() {
 
 exec_command() {
     printf "Command: %s\n\n" "${command_exec}"
-    printf "Are you sure to run this command (y/n)? "
-    read -r answer
-    case ${answer:0:1} in
-        y|Y )
-            eval ${command_exec}
-            ;;
-        * )
-            echo "End"
-            ;;
-    esac
+
+    if [[ ${COMMAND_YES} == false ]]; then
+        printf "Are you sure to run this command (y/n)? "
+        read -r answer
+        case ${answer:0:1} in
+            y|Y )
+                eval ${command_exec}
+                ;;
+            * )
+                echo "End"
+                ;;
+        esac
+    else
+        eval ${command_exec}
+    fi
 }
 
 main() {
+    options=$(getopt -o "yc:" -a -- "$@")
+    eval set -- "$options"
+
+    while true
+    do
+        case $1 in
+            -y) 
+                COMMAND_YES=true
+                ;;
+
+            -c) 
+                shift
+                CONFIGURATION_FILE="${1}"
+                ;;
+
+            --)
+                shift
+                break;;
+        esac
+        shift
+    done
+
     case "${1}" in
         run)
             COMMAND_TYPE='run'
-            CONFIGURATION_FILE="${2}"
 
             if read_configuration_file; then exec_command; fi
             ;;
 
         install)
             COMMAND_TYPE='install'
-            CONFIGURATION_FILE="${2}"
 
             if read_configuration_file; then exec_command; fi
             ;;
 
         clean)
             COMMAND_TYPE='clean'
-            CONFIGURATION_FILE="${2}"
 
             if read_configuration_file; then exec_command; fi
             ;;
 
         build)
             COMMAND_TYPE='build'
-            CONFIGURATION_FILE="${2}"
 
             if read_configuration_file; then exec_command; fi
             ;;
 
         deploy)
             COMMAND_TYPE='deploy'
-            CONFIGURATION_FILE="${2}"
 
             if read_configuration_file; then exec_command; fi
             ;;
 
         test)
             COMMAND_TYPE='test'
-            CONFIGURATION_FILE="${2}"
 
             if read_configuration_file; then exec_command; fi
             ;;
